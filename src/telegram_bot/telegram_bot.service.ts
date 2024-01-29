@@ -17,7 +17,7 @@ export class TelegramBotService {
     try {
       this.forms.push({ name, phone })
 
-      return 'Успешно отправлена форма!'
+      return 200
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error.response.data)
       throw error
