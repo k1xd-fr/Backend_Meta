@@ -30,12 +30,13 @@ export class AuthService {
       ),
     }
   }
-  async register(user: iUser) {}
+  // async register(user: iUser) {}
 
   async refreshToken(user: iUser) {
     return {
       accesToken: this.jwtService.sign({ id: user.id, email: user.email }),
     }
   }
-  async logout(user: iUser) {}
+  async generateTokens(payload) {}
+  // async logout(user: iUser) {}
 }

@@ -14,16 +14,16 @@ export class AuthController {
   async login(@Request() req) {
     return this.authService.login(req.user)
   }
-  @Post('signup')
-  @UseGuards(LocalAuthGuard)
-  async register(@Request() req) {
-    return this.authService.register(req.user)
-  }
-  @Post('logout')
-  @UseGuards(LocalAuthGuard)
-  async logout() {
-    return this.authService.logout
-  }
+  // @Post('signup')
+  // @UseGuards(LocalAuthGuard)
+  // async register(@Request() req) {
+  //   return this.authService.register(req.user)
+  // }
+  // @Post('logout')
+  // @UseGuards(LocalAuthGuard)
+  // async logout() {
+  //   return this.authService.logout
+  // }
 
   @Post('refresh')
   @UseGuards(RefreshJwtGuard)
