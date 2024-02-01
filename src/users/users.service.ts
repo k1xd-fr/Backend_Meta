@@ -29,8 +29,7 @@ export class UsersService {
       email: createUserDto.email,
       password: hashedPassword,
     })
-    const token = this.jwtService.sign({ email: createUserDto.email })
-    return { user, token }
+    return { user }
   }
 
   async findAll() {
@@ -69,5 +68,8 @@ export class UsersService {
     })
     if (!user) throw new NotFoundException('Такого пользователя нету')
     return await this.usersRepository.delete(id)
+  }
+  async save(user: User): Promise<User> {
+    return await this.usersRepository.save(user)
   }
 }

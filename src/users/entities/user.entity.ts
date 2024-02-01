@@ -18,7 +18,7 @@ export class User {
   password: string
 
   @Column({ nullable: true })
-  hashedRt: string
+  refresh_token: string
 
   @CreateDateColumn()
   createdAt: Date
