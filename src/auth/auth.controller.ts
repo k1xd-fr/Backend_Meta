@@ -1,41 +1,43 @@
 import { AuthService } from './auth.service'
-import { Controller, Post, Request, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common'
 
-import { LocalAuthGuard } from './guards/local-auth.guard'
-// import { JwtAuthGuard } from './guards/jwt-auth.guard'
-import { RefreshJwtGuard } from './guards/refresh-jwt-auth.guards'
+import { CreateUserDto } from 'src/users/dto/create-user.dto'
+import { AccessTokenGuard } from './guards/jwt-auth.guard'
+import { RefreshTokenGuard } from './guards/refresh-jwt-auth.guards'
+import { AuthDto } from './dto/auth.dto'
+interface ExtendedRequest extends Request {
+  user?: any
+}
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('sigin')
-  @UseGuards(LocalAuthGuard)
-  async login(@Request() req) {
-    console.log(req.user)
-
-    return this.authService.login(req.user)
-  }
-  // @Post('signup')
-  // @UseGuards(LocalAuthGuard)
-  // async register(@Request() req) {
-  //   return this.authService.register(req.user)
-  // }
-  // @Post('logout')
-  // @UseGuards(LocalAuthGuard)
-  // async logout() {
-  //   return this.authService.logout
-  // }
-
-  @Post('refresh')
-  @UseGuards(RefreshJwtGuard)
-  async refreshToken(@Request() req) {
-    return this.authService.refreshToken(req.user)
+  async sigin(@Body() authDto: AuthDto) {
+    return this.authService.signIn(authDto)
   }
 
-  // @Get('main')
-  // @UseGuards(JwtAuthGuard)
-  // getProfile(@Request() req) {
-  //   return req.user
-  // }
+  @Post('/signup')
+  async signup(@Body() createUserDto: CreateUserDto) {
+    return this.authService.signUp(createUserDto)
+  }
+
+  @UseGuards(AccessTokenGuard)
+  @Post('logout')
+  async logout(@Req() req: ExtendedRequest) {
+    const userId = req.user.sub
+    await this.authService.logout(userId)
+
+    return { message: 'Logout successful' }
+  }
+
+  @Get('refresh')
+  @UseGuards(RefreshTokenGuard)
+  refreshTokens(@Req() req) {
+    const userId = req.user.sub
+    const refreshToken = req.headers['authorization']?.replace('Bearer ', '')
+
+    return this.authService.refreshTokens(userId, refreshToken)
+  }
 }

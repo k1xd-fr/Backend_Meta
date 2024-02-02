@@ -18,32 +18,41 @@ export class UsersService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async create(createUserDto: CreateUserDto) {
-    const existUser = await this.usersRepository.findOne({
-      where: { email: createUserDto.email },
-    })
-    if (existUser) throw new BadRequestException('Этот email занят!')
-    const hashedPassword = await argon2.hash(createUserDto.password)
+  async create(createUserDto: CreateUserDto): Promise<User> {
+    const { email, password, refresh_token } = createUserDto
 
-    const user = await this.usersRepository.save({
-      email: createUserDto.email,
-      password: hashedPassword,
+    const existingUser = await this.usersRepository.findOne({
+      where: { email },
     })
-    return { user }
+    if (existingUser) {
+      throw new BadRequestException('Этот email занят!')
+    }
+
+    const hashedPassword = await argon2.hash(password)
+
+    const newUser = this.usersRepository.create({
+      email,
+      password: hashedPassword,
+      refresh_token,
+    })
+
+    const savedUser = await this.usersRepository.save(newUser)
+
+    return savedUser
   }
 
   async findAll() {
     return await this.usersRepository.find()
   }
 
-  async findOne(id: number) {
+  async findById(id: number) {
     const isExist = await this.usersRepository.findOne({ where: { id } })
     if (!isExist) throw new NotFoundException('Такого пользователя нету')
 
     return isExist
   }
 
-  async findEmail(email: string) {
+  async findByEmail(email: string) {
     const isExist = await this.usersRepository.findOne({ where: { email } })
     if (!isExist) throw new NotFoundException('Такого пользователя нету')
 
@@ -68,8 +77,5 @@ export class UsersService {
     })
     if (!user) throw new NotFoundException('Такого пользователя нету')
     return await this.usersRepository.delete(id)
-  }
-  async save(user: User): Promise<User> {
-    return await this.usersRepository.save(user)
   }
 }

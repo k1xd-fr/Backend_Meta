@@ -1,91 +1,103 @@
 import {
+  BadRequestException,
+  ForbiddenException,
   Injectable,
-  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common'
 import { UsersService } from 'src/users/users.service'
 import * as argon2 from 'argon2'
 import { JwtService } from '@nestjs/jwt'
-import { iUser } from 'src/types/types'
+import { CreateUserDto } from 'src/users/dto/create-user.dto'
+import { ConfigService } from '@nestjs/config'
+import { AuthDto } from './dto/auth.dto'
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
-  async validateUser(email: string, password: string) {
-    const user = await this.usersService.findEmail(email)
-    const passwordIsMatch = await argon2.verify(user.password, password)
+  async signIn(data: AuthDto) {
+    const user = await this.usersService.findByEmail(data.email)
 
-    if (user && passwordIsMatch) {
-      return user
-    }
-    throw new UnauthorizedException('Пароль не верный')
+    if (!user) throw new BadRequestException('Нету такого пользователя')
+
+    const passwordMatches = await argon2.verify(user.password, data.password)
+
+    if (!passwordMatches) throw new UnauthorizedException('Пароль не верный')
+
+    const tokens = await this.generateTokens(user.id, user.email)
+
+    await this.updateRefreshToken(user.id, tokens.refreshToken)
+    return tokens
   }
-  async login({ email, password }: iUser) {
-    const user = await this.validateUser(email, password)
+  async signUp(createUserDto: CreateUserDto): Promise<any> {
+    const newUser = await this.usersService.create(createUserDto)
 
-    const { id, email: userEmail } = user
+    const tokens = await this.generateTokens(newUser.id, newUser.email)
 
-    const { accessToken, refreshToken } = this.generateTokens({
-      id,
-      email: userEmail,
-    })
-    await this.saveRefreshToken(id, refreshToken)
+    await this.updateRefreshToken(newUser.id, tokens.refreshToken)
+
+    return tokens
+  }
+  async logout(userId: number) {
+    return this.usersService.update(userId, { refresh_token: null })
+  }
+  async generateTokens(userId: number, username: string) {
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(
+        {
+          sub: userId,
+          username,
+        },
+        {
+          secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+          expiresIn: '7m',
+        },
+      ),
+      this.jwtService.signAsync(
+        {
+          sub: userId,
+          username,
+        },
+        {
+          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+          expiresIn: '7h',
+        },
+      ),
+    ])
 
     return {
-      id,
-      email: userEmail,
       accessToken,
       refreshToken,
     }
   }
-  // async register(user: iUser) {}
 
-  async refreshToken(id: number) {
-    const user = await this.usersService.findOne(id)
-
-    if (!user) {
-      throw new UnauthorizedException('Пользователь не найден')
-    }
-    const { accessToken, refreshToken } = this.generateTokens({
-      id: user.id,
-      email: user.email,
-    })
-
-    await this.saveRefreshToken(id, refreshToken)
-
-    return {
-      accessToken,
-      refreshToken,
-    }
+  hashData(data: string) {
+    return argon2.hash(data)
   }
-  private generateTokens(payload: { id: number; email: string }) {
-    const { id, email } = payload
-    const accessToken = this.jwtService.sign({ id, email }, { expiresIn: '7m' })
-    const refreshToken = this.jwtService.sign(
-      { id, email },
-      { expiresIn: '7d' },
+  async updateRefreshToken(userId: number, refreshToken: string) {
+    const hashedRefreshToken = await this.hashData(refreshToken)
+    await this.usersService.update(userId, {
+      refresh_token: hashedRefreshToken,
+    })
+  }
+  // auth.service.ts
+
+  async refreshTokens(userId: number, refreshToken: string) {
+    const user = await this.usersService.findById(userId)
+
+    if (!user || !user.refresh_token)
+      throw new ForbiddenException('Access Denied')
+
+    const refreshTokenMatches = await argon2.verify(
+      user.refresh_token,
+      refreshToken,
     )
 
-    return {
-      accessToken,
-      refreshToken,
-    }
+    if (!refreshTokenMatches) throw new ForbiddenException('Access Denied')
+    const tokens = await this.generateTokens(user.id, user.email)
+    await this.updateRefreshToken(user.id, tokens.refreshToken)
+    return tokens
   }
-  private async saveRefreshToken(
-    id: number,
-    refreshToken: string,
-  ): Promise<void> {
-    const user = await this.usersService.findOne(id)
-
-    if (!user) {
-      throw new NotFoundException('Пользователь не найден')
-    }
-
-    user.refresh_token = refreshToken
-
-    await this.usersService.save(user)
-  }
-  // async logout(user: iUser) {}
 }
